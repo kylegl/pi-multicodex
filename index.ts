@@ -658,7 +658,7 @@ export class AccountManager {
 
 type ApiProviderRef = NonNullable<ReturnType<typeof getApiProvider>>;
 
-export function buildMulticodexProviderConfig(accountManager: AccountManager): {
+type MulticodexProviderConfig = {
 	baseUrl: string;
 	apiKey: string;
 	api: "openai-codex-responses";
@@ -668,13 +668,15 @@ export function buildMulticodexProviderConfig(accountManager: AccountManager): {
 		options?: SimpleStreamOptions,
 	) => AssistantMessageEventStream;
 	models: ProviderModelDef[];
-} {
+};
+
+export function buildMulticodexProviderConfig(
+	accountManager: AccountManager,
+): MulticodexProviderConfig | undefined {
 	const mirror = getOpenAICodexMirror();
 	const baseProvider = getApiProvider("openai-codex-responses");
 	if (!baseProvider) {
-		throw new Error(
-			"OpenAI Codex provider not available. Please update pi to include openai-codex support.",
-		);
+		return undefined;
 	}
 	return {
 		baseUrl: mirror.baseUrl,
@@ -695,10 +697,14 @@ export default function multicodexExtension(pi: ExtensionAPI) {
 		}
 	});
 
-	pi.registerProvider(
-		PROVIDER_ID,
-		buildMulticodexProviderConfig(accountManager),
-	);
+	const providerConfig = buildMulticodexProviderConfig(accountManager);
+	if (providerConfig) {
+		pi.registerProvider(PROVIDER_ID, providerConfig);
+	} else {
+		console.warn(
+			"[multicodex] OpenAI Codex provider is unavailable in this pi build. MultiCodex provider registration has been skipped.",
+		);
+	}
 
 	// Login command
 	pi.registerCommand("multicodex-login", {

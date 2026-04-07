@@ -64,11 +64,12 @@ describe("buildMulticodexProviderConfig", () => {
 			{} as unknown as AccountManager,
 		);
 
-		expect(config.api).toBe("openai-codex-responses");
-		expect(config.apiKey).toBe("managed-by-extension");
-		expect(config.baseUrl).toBe(mirror.baseUrl);
-		expect(config.models).toEqual(mirror.models);
-		expect(typeof config.streamSimple).toBe("function");
+		expect(config).toBeDefined();
+		expect(config?.api).toBe("openai-codex-responses");
+		expect(config?.apiKey).toBe("managed-by-extension");
+		expect(config?.baseUrl).toBe(mirror.baseUrl);
+		expect(config?.models).toEqual(mirror.models);
+		expect(typeof config?.streamSimple).toBe("function");
 	});
 });
 
