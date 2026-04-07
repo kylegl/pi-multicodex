@@ -50,6 +50,17 @@ function getErrorMessage(err: unknown): string {
 	return typeof err === "string" ? err : JSON.stringify(err);
 }
 
+function isAbortLikeError(err: unknown): boolean {
+	if (err instanceof Error) {
+		if (err.name === "AbortError") return true;
+		return /\babort(?:ed)?\b/i.test(err.message);
+	}
+	if (typeof err === "string") {
+		return /\babort(?:ed)?\b/i.test(err);
+	}
+	return false;
+}
+
 type LoginOpenAICodexFn = (options: {
 	onAuth: (info: { url: string; instructions?: string }) => void;
 	onPrompt: (prompt: { message: string }) => Promise<string>;
@@ -616,12 +627,18 @@ export class AccountManager {
 			this.usageCache.set(account.email, usage);
 			return usage;
 		} catch (error) {
+			if (isAbortLikeError(error)) {
+				console.debug(
+					`[multicodex] Usage fetch aborted for ${account.email}: ${getErrorMessage(error)}`,
+				);
+				return cached;
+			}
 			this.warningHandler?.(
 				`Multicodex: failed to fetch usage for ${account.email}: ${getErrorMessage(
 					error,
 				)}`,
 			);
-			return undefined;
+			return cached;
 		}
 	}
 
