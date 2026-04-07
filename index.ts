@@ -38,6 +38,8 @@ import type {
 
 const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const USAGE_REQUEST_TIMEOUT_MS = 10 * 1000;
+const USAGE_REQUEST_MAX_RETRIES = 2;
+const USAGE_RETRY_BACKOFF_MS = [300, 900] as const;
 
 export function isQuotaErrorMessage(message: string): boolean {
 	return /\b429\b|quota|usage limit|rate.?limit|too many requests|limit reached/i.test(
@@ -59,6 +61,50 @@ function isAbortLikeError(err: unknown): boolean {
 		return /\babort(?:ed)?\b/i.test(err);
 	}
 	return false;
+}
+
+function getUsageHttpStatus(err: unknown): number | undefined {
+	const message = getErrorMessage(err);
+	const match = message.match(/Usage request failed:\s*(\d{3})/);
+	if (!match) return undefined;
+	return Number(match[1]);
+}
+
+function isRetryableUsageError(err: unknown): boolean {
+	if (isAbortLikeError(err)) return true;
+	const status = getUsageHttpStatus(err);
+	if (status !== undefined) {
+		return status === 429 || status >= 500;
+	}
+	if (err instanceof TypeError) {
+		return /fetch failed|network|timed out|timeout|econnreset|enotfound|eai_again/i.test(
+			err.message,
+		);
+	}
+	return false;
+}
+
+async function sleepWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
+	if (ms <= 0) return;
+	await new Promise<void>((resolve, reject) => {
+		const timeout = setTimeout(() => {
+			cleanup();
+			resolve();
+		}, ms);
+		const onAbort = () => {
+			cleanup();
+			reject(new DOMException("Aborted", "AbortError"));
+		};
+		const cleanup = () => {
+			clearTimeout(timeout);
+			signal?.removeEventListener("abort", onAbort);
+		};
+		if (signal?.aborted) {
+			onAbort();
+			return;
+		}
+		signal?.addEventListener("abort", onAbort, { once: true });
+	});
 }
 
 type LoginOpenAICodexFn = (options: {
@@ -619,27 +665,43 @@ export class AccountManager {
 			return cached;
 		}
 
-		try {
-			const token = await this.ensureValidToken(account);
-			const usage = await fetchCodexUsage(token, account.accountId, {
-				signal: options?.signal,
-			});
-			this.usageCache.set(account.email, usage);
-			return usage;
-		} catch (error) {
-			if (isAbortLikeError(error)) {
+		let lastError: unknown;
+		for (let attempt = 0; attempt <= USAGE_REQUEST_MAX_RETRIES; attempt++) {
+			try {
+				const token = await this.ensureValidToken(account);
+				const usage = await fetchCodexUsage(token, account.accountId, {
+					signal: options?.signal,
+				});
+				this.usageCache.set(account.email, usage);
+				return usage;
+			} catch (error) {
+				lastError = error;
+				const willRetry =
+					attempt < USAGE_REQUEST_MAX_RETRIES && isRetryableUsageError(error);
+				if (!willRetry) break;
+				const backoffMs =
+					USAGE_RETRY_BACKOFF_MS[
+						Math.min(attempt, USAGE_RETRY_BACKOFF_MS.length - 1)
+					];
 				console.debug(
-					`[multicodex] Usage fetch aborted for ${account.email}: ${getErrorMessage(error)}`,
+					`[multicodex] Usage fetch retry ${attempt + 1}/${USAGE_REQUEST_MAX_RETRIES} for ${account.email} after: ${getErrorMessage(error)}`,
 				);
-				return cached;
+				await sleepWithSignal(backoffMs, options?.signal);
 			}
-			this.warningHandler?.(
-				`Multicodex: failed to fetch usage for ${account.email}: ${getErrorMessage(
-					error,
-				)}`,
+		}
+
+		if (isAbortLikeError(lastError)) {
+			console.debug(
+				`[multicodex] Usage fetch aborted for ${account.email}: ${getErrorMessage(lastError)}`,
 			);
 			return cached;
 		}
+		this.warningHandler?.(
+			`Multicodex: failed to fetch usage for ${account.email}: ${getErrorMessage(
+				lastError,
+			)}`,
+		);
+		return cached;
 	}
 
 	async refreshUsageForAllAccounts(options?: {
