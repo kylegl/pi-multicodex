@@ -45,6 +45,11 @@ pi -e ./index.ts
 - `/multicodex-status`
   - Shows accounts + cached usage info + which one is currently active.
 
+## Internal structure note
+
+The package is now split into a platform-agnostic core under `core/` and a pi-specific adapter under `adapter/pi/`.
+This is an internal refactor only: the pi install flow and the documented `/multicodex-login`, `/multicodex-use`, and `/multicodex-status` command surface are unchanged.
+
 ## How account selection works (high level)
 
 When pi starts / when a new session starts, the extension:

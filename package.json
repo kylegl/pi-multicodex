@@ -30,6 +30,8 @@
 	"author": "kim0",
 	"files": [
 		"index.ts",
+		"core/**",
+		"adapter/**",
 		"README.md",
 		"LICENSE",
 		"assets/**"
