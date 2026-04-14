@@ -10,8 +10,10 @@
 	},
 	"include": [
 		"index.ts",
+		"core/**/*.ts",
+		"adapter/**/*.ts",
 		"pi-coding-agent.d.ts",
-		"index.test.ts",
+		"**/*.test.ts",
 		"vitest.config.ts"
 	]
 }
