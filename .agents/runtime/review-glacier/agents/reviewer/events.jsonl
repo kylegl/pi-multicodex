@@ -1,0 +1,4 @@
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.269Z","type":"agent.queued","runId":"review-glacier","agentId":"reviewer"}
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.269Z","type":"agent.state_changed","runId":"review-glacier","agentId":"reviewer","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.277Z","type":"agent.state_changed","runId":"review-glacier","agentId":"reviewer","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T09:10:07.034Z","type":"agent.state_changed","runId":"review-glacier","agentId":"reviewer","from":"running","to":"completed","exitCode":0}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "runId": "create-meteor",
+  "agentId": "planner",
+  "agentName": "planner",
+  "dirName": "planner",
+  "state": "completed",
+  "createdAt": "2026-04-14T09:30:34.588Z",
+  "updatedAt": "2026-04-14T09:33:28.181Z",
+  "lastEventAt": "2026-04-14T09:33:28.181Z",
+  "sessionDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-meteor/agents/planner/session",
+  "artifactsDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-meteor/agents/planner/artifacts",
+  "mailbox": {
+    "inboxPath": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-meteor/agents/planner/inbox.jsonl",
+    "outboxPath": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-meteor/agents/planner/outbox.jsonl",
+    "unreadCount": 0
+  },
+  "startedAt": "2026-04-14T09:30:34.597Z",
+  "lastToolAt": "2026-04-14T09:33:18.329Z",
+  "exitCode": 0
+}

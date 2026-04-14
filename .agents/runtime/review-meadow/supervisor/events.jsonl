@@ -1,0 +1,7 @@
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.477Z","type":"agent.registered","runId":"review-meadow","agentId":"reviewer","agentName":"reviewer","dependsOn":[]}
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.478Z","type":"runtime.initialized","runId":"review-meadow","requestMode":"single","totalRequestedAgents":1,"totalManagedAgents":1}
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.478Z","type":"runtime.state_changed","runId":"review-meadow","from":"initializing","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.478Z","type":"agent.state_changed","runId":"review-meadow","agentId":"reviewer","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.484Z","type":"agent.state_changed","runId":"review-meadow","agentId":"reviewer","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T09:39:15.674Z","type":"agent.state_changed","runId":"review-meadow","agentId":"reviewer","from":"running","to":"completed","exitCode":0}
+{"schemaVersion":1,"ts":"2026-04-14T09:39:15.680Z","type":"runtime.state_changed","runId":"review-meadow","from":"running","to":"completed"}

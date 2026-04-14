@@ -1,0 +1,17 @@
+{
+  "runtimeSchemaVersion": 1,
+  "runId": "review-glacier",
+  "mode": "managed",
+  "createdAt": "2026-04-14T09:02:40.266Z",
+  "runtimeDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-glacier",
+  "interactiveMessaging": false,
+  "stallThresholdMs": 90000,
+  "admission": {
+    "maxConcurrentChildren": 4,
+    "maxTotalAgents": 32
+  },
+  "persistence": {
+    "visibilityMode": "buffered",
+    "flushIntervalMs": 250
+  }
+}

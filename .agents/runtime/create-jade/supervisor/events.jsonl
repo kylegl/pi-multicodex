@@ -1,0 +1,7 @@
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.778Z","type":"agent.registered","runId":"create-jade","agentId":"spec","agentName":"spec","dependsOn":[]}
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.778Z","type":"runtime.initialized","runId":"create-jade","requestMode":"single","totalRequestedAgents":1,"totalManagedAgents":1}
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.778Z","type":"runtime.state_changed","runId":"create-jade","from":"initializing","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.779Z","type":"agent.state_changed","runId":"create-jade","agentId":"spec","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.786Z","type":"agent.state_changed","runId":"create-jade","agentId":"spec","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T08:59:33.744Z","type":"agent.state_changed","runId":"create-jade","agentId":"spec","from":"running","to":"completed","exitCode":0}
+{"schemaVersion":1,"ts":"2026-04-14T08:59:33.747Z","type":"runtime.state_changed","runId":"create-jade","from":"running","to":"completed"}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "runId": "review-knoll",
+  "rootAgentIds": [
+    "reviewer"
+  ],
+  "nodes": {
+    "reviewer": {
+      "agentId": "reviewer",
+      "agentName": "reviewer",
+      "children": [],
+      "state": "completed",
+      "createdAt": "2026-04-14T09:57:00.524Z",
+      "updatedAt": "2026-04-14T10:02:42.316Z",
+      "dirName": "reviewer",
+      "sessionDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-knoll/agents/reviewer/session",
+      "artifactsDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-knoll/agents/reviewer/artifacts",
+      "startedAt": "2026-04-14T09:57:00.532Z",
+      "lastToolAt": "2026-04-14T10:02:17.870Z",
+      "lastTool": "memex_retro",
+      "lastToolArgs": "slug=kg-multicodex-review-doc-criteria-can-be-the-on...",
+      "exitCode": 0
+    }
+  }
+}

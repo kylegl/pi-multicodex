@@ -1,0 +1,4 @@
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.477Z","type":"agent.queued","runId":"review-meadow","agentId":"reviewer"}
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.478Z","type":"agent.state_changed","runId":"review-meadow","agentId":"reviewer","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T09:33:39.484Z","type":"agent.state_changed","runId":"review-meadow","agentId":"reviewer","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T09:39:15.674Z","type":"agent.state_changed","runId":"review-meadow","agentId":"reviewer","from":"running","to":"completed","exitCode":0}

@@ -1,0 +1,17 @@
+{
+  "runtimeSchemaVersion": 1,
+  "runId": "create-meteor",
+  "mode": "managed",
+  "createdAt": "2026-04-14T09:30:34.587Z",
+  "runtimeDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-meteor",
+  "interactiveMessaging": false,
+  "stallThresholdMs": 90000,
+  "admission": {
+    "maxConcurrentChildren": 4,
+    "maxTotalAgents": 32
+  },
+  "persistence": {
+    "visibilityMode": "buffered",
+    "flushIntervalMs": 250
+  }
+}

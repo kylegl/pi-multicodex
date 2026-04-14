@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runId": "review-glacier",
+  "agentId": "reviewer",
+  "agentName": "reviewer",
+  "dirName": "reviewer",
+  "state": "completed",
+  "createdAt": "2026-04-14T09:02:40.268Z",
+  "updatedAt": "2026-04-14T09:10:07.034Z",
+  "lastEventAt": "2026-04-14T09:10:07.034Z",
+  "sessionDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-glacier/agents/reviewer/session",
+  "artifactsDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-glacier/agents/reviewer/artifacts",
+  "mailbox": {
+    "inboxPath": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-glacier/agents/reviewer/inbox.jsonl",
+    "outboxPath": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-glacier/agents/reviewer/outbox.jsonl",
+    "unreadCount": 0
+  },
+  "startedAt": "2026-04-14T09:02:40.277Z",
+  "lastToolAt": "2026-04-14T09:08:43.321Z",
+  "lastTool": "memex_retro",
+  "lastToolArgs": "slug=spec-parity-contracts-should-exclude-intended-i...",
+  "exitCode": 0
+}

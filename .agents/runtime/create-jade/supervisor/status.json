@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "runId": "create-jade",
+  "mode": "managed",
+  "state": "completed",
+  "createdAt": "2026-04-14T08:54:55.775Z",
+  "updatedAt": "2026-04-14T08:59:33.747Z",
+  "stallThresholdMs": 90000,
+  "admission": {
+    "maxConcurrentChildren": 4,
+    "maxTotalAgents": 32
+  },
+  "interactiveMessaging": false,
+  "persistence": {
+    "visibilityMode": "buffered",
+    "flushIntervalMs": 250
+  },
+  "totals": {
+    "totalAgents": 1,
+    "runningAgents": 0,
+    "queuedAgents": 0,
+    "terminalAgents": 1
+  },
+  "completedAt": "2026-04-14T08:59:33.747Z"
+}

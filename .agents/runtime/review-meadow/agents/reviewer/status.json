@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "runId": "review-meadow",
+  "agentId": "reviewer",
+  "agentName": "reviewer",
+  "dirName": "reviewer",
+  "state": "completed",
+  "createdAt": "2026-04-14T09:33:39.477Z",
+  "updatedAt": "2026-04-14T09:39:15.674Z",
+  "lastEventAt": "2026-04-14T09:39:15.674Z",
+  "sessionDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-meadow/agents/reviewer/session",
+  "artifactsDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-meadow/agents/reviewer/artifacts",
+  "mailbox": {
+    "inboxPath": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-meadow/agents/reviewer/inbox.jsonl",
+    "outboxPath": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/review-meadow/agents/reviewer/outbox.jsonl",
+    "unreadCount": 0
+  },
+  "startedAt": "2026-04-14T09:33:39.484Z",
+  "lastToolAt": "2026-04-14T09:38:27.140Z",
+  "lastTool": "memex_retro",
+  "lastToolArgs": "slug=kg-multicodex-refactor-plan-must-pin-rotation-a...",
+  "exitCode": 0
+}

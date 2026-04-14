@@ -1,0 +1,4 @@
+{"schemaVersion":1,"ts":"2026-04-14T09:57:00.525Z","type":"agent.queued","runId":"review-knoll","agentId":"reviewer"}
+{"schemaVersion":1,"ts":"2026-04-14T09:57:00.525Z","type":"agent.state_changed","runId":"review-knoll","agentId":"reviewer","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T09:57:00.532Z","type":"agent.state_changed","runId":"review-knoll","agentId":"reviewer","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T10:02:42.316Z","type":"agent.state_changed","runId":"review-knoll","agentId":"reviewer","from":"running","to":"completed","exitCode":0}

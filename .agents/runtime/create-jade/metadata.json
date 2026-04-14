@@ -1,0 +1,17 @@
+{
+  "runtimeSchemaVersion": 1,
+  "runId": "create-jade",
+  "mode": "managed",
+  "createdAt": "2026-04-14T08:54:55.775Z",
+  "runtimeDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-jade",
+  "interactiveMessaging": false,
+  "stallThresholdMs": 90000,
+  "admission": {
+    "maxConcurrentChildren": 4,
+    "maxTotalAgents": 32
+  },
+  "persistence": {
+    "visibilityMode": "buffered",
+    "flushIntervalMs": 250
+  }
+}

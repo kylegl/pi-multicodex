@@ -1,0 +1,4 @@
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.777Z","type":"agent.queued","runId":"create-jade","agentId":"spec"}
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.779Z","type":"agent.state_changed","runId":"create-jade","agentId":"spec","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T08:54:55.786Z","type":"agent.state_changed","runId":"create-jade","agentId":"spec","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T08:59:33.743Z","type":"agent.state_changed","runId":"create-jade","agentId":"spec","from":"running","to":"completed","exitCode":0}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "runId": "create-jade",
+  "rootAgentIds": [
+    "spec"
+  ],
+  "nodes": {
+    "spec": {
+      "agentId": "spec",
+      "agentName": "spec",
+      "children": [],
+      "state": "completed",
+      "createdAt": "2026-04-14T08:54:55.776Z",
+      "updatedAt": "2026-04-14T08:59:33.743Z",
+      "dirName": "spec",
+      "sessionDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-jade/agents/spec/session",
+      "artifactsDir": "/home/linkdevk/repos/kg-multicodex/.agents/runtime/create-jade/agents/spec/artifacts",
+      "startedAt": "2026-04-14T08:54:55.786Z",
+      "lastToolAt": "2026-04-14T08:59:29.776Z",
+      "lastTool": "memex_retro",
+      "lastToolArgs": "slug=kg-multicodex-refactor-boundaries-are-behavior-...",
+      "exitCode": 0
+    }
+  }
+}

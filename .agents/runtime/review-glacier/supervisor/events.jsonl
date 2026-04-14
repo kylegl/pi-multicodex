@@ -1,0 +1,7 @@
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.269Z","type":"agent.registered","runId":"review-glacier","agentId":"reviewer","agentName":"reviewer","dependsOn":[]}
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.269Z","type":"runtime.initialized","runId":"review-glacier","requestMode":"single","totalRequestedAgents":1,"totalManagedAgents":1}
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.269Z","type":"runtime.state_changed","runId":"review-glacier","from":"initializing","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.270Z","type":"agent.state_changed","runId":"review-glacier","agentId":"reviewer","from":"queued","to":"starting"}
+{"schemaVersion":1,"ts":"2026-04-14T09:02:40.277Z","type":"agent.state_changed","runId":"review-glacier","agentId":"reviewer","from":"starting","to":"running"}
+{"schemaVersion":1,"ts":"2026-04-14T09:10:07.034Z","type":"agent.state_changed","runId":"review-glacier","agentId":"reviewer","from":"running","to":"completed","exitCode":0}
+{"schemaVersion":1,"ts":"2026-04-14T09:10:07.040Z","type":"runtime.state_changed","runId":"review-glacier","from":"running","to":"completed"}

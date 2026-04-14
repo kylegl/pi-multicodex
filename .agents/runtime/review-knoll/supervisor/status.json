@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "runId": "review-knoll",
+  "mode": "managed",
+  "state": "completed",
+  "createdAt": "2026-04-14T09:57:00.524Z",
+  "updatedAt": "2026-04-14T10:02:42.320Z",
+  "stallThresholdMs": 90000,
+  "admission": {
+    "maxConcurrentChildren": 4,
+    "maxTotalAgents": 32
+  },
+  "interactiveMessaging": false,
+  "persistence": {
+    "visibilityMode": "buffered",
+    "flushIntervalMs": 250
+  },
+  "totals": {
+    "totalAgents": 1,
+    "runningAgents": 0,
+    "queuedAgents": 0,
+    "terminalAgents": 1
+  },
+  "completedAt": "2026-04-14T10:02:42.320Z"
+}
