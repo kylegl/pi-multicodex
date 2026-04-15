@@ -66,6 +66,28 @@ When streaming and a quota/rate-limit error happens **before any tokens are gene
 - Marks the account as exhausted until its reset (or a fallback cooldown)
 - Rotates to another account and retries
 
+## Public API
+
+When used as a pi extension, only the default export is required:
+
+- `default` — registers the MultiCodex provider, commands, and session hooks.
+
+For tests and advanced integrations, these named exports are considered public:
+
+- `AccountManager`
+- `buildMulticodexProviderConfig`
+- `getOpenAICodexMirror`
+- `pickBestAccount`
+- `createStreamWrapper`
+- `isQuotaErrorMessage`
+- `parseCodexUsageResponse`
+- `isUsageUntouched`
+- `getNextResetAt`
+- `getWeeklyResetAt`
+- Types: `Account`, `StorageData`, `CodexUsageSnapshot`, `ProviderModelDef`
+
+Everything else under `core/` and `adapter/pi/` should be treated as internal implementation detail.
+
 ## Checks
 
 ```bash
