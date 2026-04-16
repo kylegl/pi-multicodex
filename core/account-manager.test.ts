@@ -1,38 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import { AccountManager, type RefreshTokenResult } from "./account-manager";
-import type { StorageAdapter } from "./storage";
-import type { Account, StorageData } from "./types";
-
-function makeAccount(email: string, overrides?: Partial<Account>): Account {
-	return {
-		email,
-		accessToken: `${email}-access`,
-		refreshToken: `${email}-refresh`,
-		expiresAt: 0,
-		...overrides,
-	};
-}
-
-function createMemoryStorage(
-	initial: StorageData = { schemaVersion: 1, accounts: [] },
-) {
-	let data: StorageData = structuredClone(initial);
-	const adapter: StorageAdapter = {
-		load: () => structuredClone(data),
-		save: (next) => {
-			data = structuredClone(next);
-		},
-	};
-	return { adapter, getData: () => structuredClone(data) };
-}
+import { createMemoryStorage, createTestAccount } from "./test-helpers";
 
 describe("AccountManager without pi runtime", () => {
 	it("uses a manual account before auto-selection", async () => {
 		const { adapter } = createMemoryStorage({
 			schemaVersion: 1,
 			accounts: [
-				makeAccount("manual@example.com"),
-				makeAccount("auto@example.com"),
+				createTestAccount("manual@example.com"),
+				createTestAccount("auto@example.com"),
 			],
 		});
 		const manager = new AccountManager({
@@ -65,7 +41,7 @@ describe("AccountManager without pi runtime", () => {
 		const manager = new AccountManager({
 			storage: createMemoryStorage({
 				schemaVersion: 1,
-				accounts: [makeAccount("a@example.com")],
+				accounts: [createTestAccount("a@example.com")],
 			}).adapter,
 			clock: now,
 			refreshToken: vi.fn(
@@ -105,20 +81,24 @@ describe("AccountManager without pi runtime", () => {
 		expect(aborted).toEqual(refreshed);
 	});
 
-	it("refreshes expired tokens once per account and keeps fresh tokens", async () => {
-		const refreshToken = vi.fn(
-			async (refreshToken: string): Promise<RefreshTokenResult> => ({
-				access: `${refreshToken}-new-access`,
-				refresh: `${refreshToken}-new-refresh`,
-				expires: Date.now() + 60_000,
-			}),
-		);
+	it("reuses a single in-flight token refresh and keeps fresh tokens unchanged", async () => {
+		let refreshCount = 0;
 		const manager = new AccountManager({
 			storage: createMemoryStorage({
 				schemaVersion: 1,
-				accounts: [makeAccount("a@example.com", { expiresAt: 0 })],
+				accounts: [createTestAccount("a@example.com", { expiresAt: 0 })],
 			}).adapter,
-			refreshToken,
+			refreshToken: async (
+				refreshToken: string,
+			): Promise<RefreshTokenResult> => {
+				refreshCount += 1;
+				await new Promise((resolve) => setTimeout(resolve, 5));
+				return {
+					access: `${refreshToken}-new-access-${refreshCount}`,
+					refresh: `${refreshToken}-new-refresh-${refreshCount}`,
+					expires: Date.now() + 60_000,
+				};
+			},
 			usageClient: { fetchCodexUsage: vi.fn() },
 		});
 
@@ -129,13 +109,63 @@ describe("AccountManager without pi runtime", () => {
 			manager.ensureValidToken(account),
 		]);
 
-		expect(one).toBe("a@example.com-refresh-new-access");
-		expect(two).toBe(one);
-		expect(refreshToken).toHaveBeenCalledTimes(1);
+		expect(one).toBe(two);
+		expect(one).toBe("a@example.com-refresh-new-access-1");
+		expect(account.refreshToken).toBe("a@example.com-refresh-new-refresh-1");
 
 		account.expiresAt = Date.now() + 6 * 60 * 1000;
-		await manager.ensureValidToken(account);
-		expect(refreshToken).toHaveBeenCalledTimes(1);
+		const stillFresh = await manager.ensureValidToken(account);
+		expect(stillFresh).toBe(one);
+		expect(account.accessToken).toBe(one);
+	});
+
+	it("activates best account and persists active selection metadata", async () => {
+		const now = 1_000_000;
+		const { adapter, getData } = createMemoryStorage({
+			schemaVersion: 1,
+			accounts: [
+				createTestAccount("used@example.com", { expiresAt: now + 60_000 }),
+				createTestAccount("fresh@example.com", { expiresAt: now + 60_000 }),
+			],
+		});
+		const manager = new AccountManager({
+			storage: adapter,
+			clock: () => now,
+			refreshToken: vi.fn(
+				async (refreshToken: string): Promise<RefreshTokenResult> => ({
+					access: `${refreshToken}-refreshed`,
+					refresh: `${refreshToken}-next`,
+					expires: now + 60_000,
+				}),
+			),
+			usageClient: {
+				fetchCodexUsage: vi.fn(async (token: string) => {
+					if (token.includes("used@example.com")) {
+						return {
+							primary: { usedPercent: 45, resetAt: now + 50_000 },
+							secondary: { usedPercent: 30, resetAt: now + 60_000 },
+							fetchedAt: now,
+						};
+					}
+					return {
+						primary: { usedPercent: 0, resetAt: now + 70_000 },
+						secondary: { usedPercent: 0, resetAt: now + 80_000 },
+						fetchedAt: now,
+					};
+				}),
+			},
+		});
+
+		const selected = await manager.activateBestAccount();
+		expect(selected?.email).toBe("fresh@example.com");
+		expect(manager.getActiveAccount()?.email).toBe("fresh@example.com");
+
+		const saved = getData();
+		expect(saved.activeEmail).toBe("fresh@example.com");
+		expect(
+			saved.accounts.find((account) => account.email === "fresh@example.com")
+				?.lastUsed,
+		).toBe(now);
 	});
 
 	it("marks exhausted accounts using reset time or fallback cooldown", async () => {
@@ -143,7 +173,7 @@ describe("AccountManager without pi runtime", () => {
 		const manager = new AccountManager({
 			storage: createMemoryStorage({
 				schemaVersion: 1,
-				accounts: [makeAccount("a@example.com")],
+				accounts: [createTestAccount("a@example.com")],
 			}).adapter,
 			clock: () => now,
 			refreshToken: vi.fn(

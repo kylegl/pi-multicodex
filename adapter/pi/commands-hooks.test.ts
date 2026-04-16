@@ -1,22 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Account } from "../../core";
 import { registerMulticodexCommands } from "./commands";
 import { registerMulticodexHooks } from "./hooks";
-
-function makeAccount(email: string): Account {
-	return {
-		email,
-		accessToken: `${email}-access`,
-		refreshToken: `${email}-refresh`,
-		expiresAt: Date.now() + 60_000,
-	};
-}
+import { createAdapterTestAccount, createHookHarness } from "./test-helpers";
 
 describe("adapter command and hook wiring", () => {
-	it("registers the documented commands", () => {
-		const commands: string[] = [];
+	it("registers the documented commands with handlers", () => {
+		const registered: Record<
+			string,
+			{ description: string; handler: unknown }
+		> = {};
 		const pi = {
-			registerCommand: (name: string) => commands.push(name),
+			registerCommand: (
+				name: string,
+				config: { description: string; handler: unknown },
+			) => {
+				registered[name] = config;
+			},
 			registerProvider: vi.fn(),
 			on: vi.fn(),
 			exec: vi.fn(),
@@ -34,53 +33,131 @@ describe("adapter command and hook wiring", () => {
 		} as never;
 
 		registerMulticodexCommands(pi, manager);
-		expect(commands).toEqual([
+
+		expect(Object.keys(registered)).toEqual([
 			"multicodex-login",
 			"multicodex-use",
 			"multicodex-status",
 		]);
+		expect(typeof registered["multicodex-login"]?.handler).toBe("function");
+		expect(typeof registered["multicodex-use"]?.handler).toBe("function");
+		expect(typeof registered["multicodex-status"]?.handler).toBe("function");
 	});
 
-	it("activates the best account on session start and new session switch", async () => {
-		const calls: string[] = [];
+	it("session_start refreshes, clears stale manual pin, and activates best account", async () => {
+		const state = {
+			refreshedWithForce: false,
+			manualCleared: false,
+			activatedEmail: undefined as string | undefined,
+		};
+		let manualPinned = true;
 		const manager = {
-			getAccounts: vi.fn(() => [makeAccount("a@example.com")]),
-			refreshUsageForAllAccounts: vi.fn(
-				async ({ force }: { force?: boolean } = {}) => {
-					calls.push(`refresh:${Boolean(force)}`);
-				},
-			),
-			getAvailableManualAccount: vi.fn(() => undefined),
-			hasManualAccount: vi.fn(() => true),
-			clearManualAccount: vi.fn(() => {
-				calls.push("clear");
-			}),
-			activateBestAccount: vi.fn(async () => {
-				calls.push("activate");
-				return undefined;
-			}),
-		} as never;
-		const handlers: Record<string, (...args: unknown[]) => void> = {};
-		const pi = {
-			on: (event: string, handler: (...args: unknown[]) => void) => {
-				handlers[event] = handler;
+			getAccounts: () => [createAdapterTestAccount("a@example.com")],
+			refreshUsageForAllAccounts: async ({
+				force,
+			}: {
+				force?: boolean;
+			} = {}) => {
+				state.refreshedWithForce = Boolean(force);
 			},
-			registerCommand: vi.fn(),
-			registerProvider: vi.fn(),
-			exec: vi.fn(),
+			getAvailableManualAccount: () => undefined,
+			hasManualAccount: () => manualPinned,
+			clearManualAccount: () => {
+				manualPinned = false;
+				state.manualCleared = true;
+			},
+			activateBestAccount: async () => {
+				state.activatedEmail = "best@example.com";
+				return createAdapterTestAccount("best@example.com");
+			},
 		} as never;
-		const ctx = { ui: { notify: vi.fn() } } as never;
 
-		registerMulticodexHooks(pi, manager, {} as never);
+		const { handlers, pi, lastContextRef } = createHookHarness();
+		registerMulticodexHooks(pi, manager, lastContextRef as never);
+		const ctx = { ui: { notify: vi.fn() } };
 		handlers.session_start({}, ctx);
+
+		await vi.waitFor(() => {
+			expect(state.refreshedWithForce).toBe(true);
+			expect(state.manualCleared).toBe(true);
+			expect(state.activatedEmail).toBe("best@example.com");
+		});
+		expect(lastContextRef.current).toBe(ctx);
+	});
+
+	it("session_switch(new) preserves valid manual account and skips activation", async () => {
+		const manual = createAdapterTestAccount("manual@example.com");
+		const state = {
+			refreshedWithForce: false,
+			manualCleared: false,
+			activated: false,
+		};
+		let manualPinned = true;
+		const manager = {
+			getAccounts: () => [manual, createAdapterTestAccount("auto@example.com")],
+			refreshUsageForAllAccounts: async ({
+				force,
+			}: {
+				force?: boolean;
+			} = {}) => {
+				state.refreshedWithForce = Boolean(force);
+			},
+			getAvailableManualAccount: () => (manualPinned ? manual : undefined),
+			hasManualAccount: () => manualPinned,
+			clearManualAccount: () => {
+				manualPinned = false;
+				state.manualCleared = true;
+			},
+			activateBestAccount: async () => {
+				state.activated = true;
+				return createAdapterTestAccount("auto@example.com");
+			},
+		} as never;
+
+		const { handlers, pi, lastContextRef } = createHookHarness();
+		registerMulticodexHooks(pi, manager, lastContextRef as never);
+		const ctx = { ui: { notify: vi.fn() } };
 		handlers.session_switch({ reason: "new" }, ctx);
 
 		await vi.waitFor(() => {
-			expect(calls.filter((entry) => entry.startsWith("refresh")).length).toBe(
-				2,
-			);
-			expect(calls.filter((entry) => entry === "clear").length).toBe(2);
-			expect(calls.filter((entry) => entry === "activate").length).toBe(2);
+			expect(state.refreshedWithForce).toBe(true);
 		});
+		expect(state.manualCleared).toBe(false);
+		expect(state.activated).toBe(false);
+		expect(lastContextRef.current).toBe(ctx);
+	});
+
+	it("session_switch(non-new) updates context only and does not trigger activation flow", async () => {
+		const state = {
+			refreshed: false,
+			manualCleared: false,
+			activated: false,
+		};
+		const manager = {
+			getAccounts: () => [createAdapterTestAccount("a@example.com")],
+			refreshUsageForAllAccounts: async () => {
+				state.refreshed = true;
+			},
+			getAvailableManualAccount: () => undefined,
+			hasManualAccount: () => true,
+			clearManualAccount: () => {
+				state.manualCleared = true;
+			},
+			activateBestAccount: async () => {
+				state.activated = true;
+				return undefined;
+			},
+		} as never;
+
+		const { handlers, pi, lastContextRef } = createHookHarness();
+		registerMulticodexHooks(pi, manager, lastContextRef as never);
+		const ctx = { ui: { notify: vi.fn() } };
+		handlers.session_switch({ reason: "resume" }, ctx);
+
+		await Promise.resolve();
+		expect(state.refreshed).toBe(false);
+		expect(state.manualCleared).toBe(false);
+		expect(state.activated).toBe(false);
+		expect(lastContextRef.current).toBe(ctx);
 	});
 });

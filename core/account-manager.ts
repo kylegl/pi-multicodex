@@ -4,7 +4,7 @@ import {
 	isRetryableUsageError,
 } from "./errors";
 import { sleepWithSignal } from "./retry";
-import { pickBestAccount } from "./selection";
+import { isAccountAvailable, pickBestAccount } from "./selection";
 import {
 	ensureCanonicalStorageData,
 	migrateStorageData,
@@ -146,7 +146,7 @@ export class AccountManager {
 		const manual = this.getManualAccount();
 		if (!manual) return undefined;
 		if (options?.excludeEmails?.has(manual.email)) return undefined;
-		if (!this.isAccountAvailable(manual, now)) return undefined;
+		if (!isAccountAvailable(manual, now)) return undefined;
 		return manual;
 	}
 
@@ -349,10 +349,6 @@ export class AccountManager {
 		} finally {
 			this.refreshInFlight.delete(key);
 		}
-	}
-
-	private isAccountAvailable(account: Account, now: number): boolean {
-		return !account.quotaExhaustedUntil || account.quotaExhaustedUntil <= now;
 	}
 
 	private clearExpiredExhaustion(now: number): void {

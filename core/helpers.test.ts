@@ -1,23 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { isQuotaErrorMessage } from "./errors";
 import { pickBestAccount } from "./selection";
-import type { Account } from "./types";
+import { createTestAccount } from "./test-helpers";
 import {
 	getNextResetAt,
 	getWeeklyResetAt,
 	isUsageUntouched,
 	parseCodexUsageResponse,
 } from "./usage";
-
-function makeAccount(email: string, overrides?: Partial<Account>): Account {
-	return {
-		email,
-		accessToken: "token",
-		refreshToken: "refresh",
-		expiresAt: 0,
-		...overrides,
-	};
-}
 
 describe("core helpers", () => {
 	it("classifies quota errors", () => {
@@ -53,7 +43,7 @@ describe("core helpers", () => {
 	});
 
 	it("prefers untouched then earliest weekly reset accounts", () => {
-		const accounts = [makeAccount("a"), makeAccount("b")];
+		const accounts = [createTestAccount("a"), createTestAccount("b")];
 		const usage = new Map([
 			[
 				"a",
@@ -77,7 +67,7 @@ describe("core helpers", () => {
 	});
 
 	it("honors excludeEmails and falls back to random available accounts", () => {
-		const accounts = [makeAccount("a"), makeAccount("b")];
+		const accounts = [createTestAccount("a"), createTestAccount("b")];
 		const usage = new Map<string, { fetchedAt: number }>();
 		const selected = pickBestAccount(accounts, usage as never, {
 			now: 0,

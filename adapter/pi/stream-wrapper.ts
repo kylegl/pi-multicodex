@@ -9,11 +9,8 @@ import {
 } from "@mariozechner/pi-ai";
 import type { AccountManager } from "../../core";
 import { isQuotaErrorMessage } from "../../core";
-import {
-	createErrorAssistantMessage,
-	createLinkedAbortController,
-	withProvider,
-} from "./stream-utils";
+import { createLinkedAbortController } from "../../core/retry";
+import { createErrorAssistantMessage, withProvider } from "./stream-utils";
 
 const MAX_ROTATION_RETRIES = 5;
 

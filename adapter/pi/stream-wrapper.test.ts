@@ -1,34 +1,24 @@
-import type { AssistantMessageEvent, Model } from "@mariozechner/pi-ai";
+import type { AssistantMessageEvent } from "@mariozechner/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 import type { Account } from "../../core";
 import { createStreamWrapper } from "./stream-wrapper";
-
-function makeAccount(email: string): Account {
-	return {
-		email,
-		accessToken: `${email}-access`,
-		refreshToken: `${email}-refresh`,
-		expiresAt: Date.now() + 60_000,
-	};
-}
-
-async function collect(stream: AsyncIterable<AssistantMessageEvent>) {
-	const events: AssistantMessageEvent[] = [];
-	for await (const event of stream) {
-		events.push(event);
-	}
-	return events;
-}
+import {
+	collectEvents,
+	createAdapterTestAccount,
+	createMulticodexTestModel,
+} from "./test-helpers";
 
 describe("createStreamWrapper", () => {
 	it("injects the selected account header and rewrites provider ids", async () => {
-		const manual = makeAccount("manual@example.com");
+		const manual = createAdapterTestAccount("manual@example.com");
 		let headerEmail: string | undefined;
 		const accountManager = {
 			getAvailableManualAccount: vi.fn(() => manual),
 			hasManualAccount: vi.fn(() => true),
 			clearManualAccount: vi.fn(),
-			activateBestAccount: vi.fn(),
+			activateBestAccount: vi.fn(async () => {
+				throw new Error("unexpected auto-selection when manual account exists");
+			}),
 			ensureValidToken: vi.fn(async () => "token-manual"),
 			handleQuotaExceeded: vi.fn(),
 		} as const;
@@ -51,38 +41,36 @@ describe("createStreamWrapper", () => {
 		const stream = createStreamWrapper(
 			accountManager as never,
 			baseProvider as never,
-		)(
-			{
-				id: "model",
-				provider: "multicodex",
-				api: "openai-codex-responses",
-			} as Model<"openai-codex-responses">,
-			{} as never,
-		);
+		)(createMulticodexTestModel(), {} as never);
 
-		const events = await collect(stream);
+		const events = await collectEvents(stream);
 		expect(headerEmail).toBe("manual@example.com");
-		expect(accountManager.activateBestAccount).not.toHaveBeenCalled();
 		expect(events[0]?.type).toBe("done");
 		if (events[0]?.type === "done") {
 			expect(events[0].message.provider).toBe("multicodex");
 		}
 	});
 
-	it("rotates on quota before output and stops after output has been forwarded", async () => {
-		const manual = makeAccount("manual@example.com");
-		const auto = makeAccount("auto@example.com");
+	it("rotates on early quota errors, then forwards output without further rotation", async () => {
+		const manual = createAdapterTestAccount("manual@example.com");
+		const auto = createAdapterTestAccount("auto@example.com");
 		const headers: string[] = [];
+		const exhaustedEmails: string[] = [];
+		let manualPinned = true;
 		let attempt = 0;
+
 		const accountManager = {
 			getAvailableManualAccount: vi.fn(
-				({ excludeEmails }: { excludeEmails?: Set<string> }) =>
-					!excludeEmails?.has(manual.email) && attempt === 0
-						? manual
-						: undefined,
+				({ excludeEmails }: { excludeEmails?: Set<string> }) => {
+					if (!manualPinned) return undefined;
+					if (excludeEmails?.has(manual.email)) return undefined;
+					return manual;
+				},
 			),
-			hasManualAccount: vi.fn(() => attempt === 0),
-			clearManualAccount: vi.fn(),
+			hasManualAccount: vi.fn(() => manualPinned),
+			clearManualAccount: vi.fn(() => {
+				manualPinned = false;
+			}),
 			activateBestAccount: vi.fn(
 				async ({ excludeEmails }: { excludeEmails?: Set<string> }) => {
 					return excludeEmails?.has(auto.email) ? undefined : auto;
@@ -91,7 +79,9 @@ describe("createStreamWrapper", () => {
 			ensureValidToken: vi.fn(
 				async (account: Account) => `${account.email}-token`,
 			),
-			handleQuotaExceeded: vi.fn(async () => {}),
+			handleQuotaExceeded: vi.fn(async (account: Account) => {
+				exhaustedEmails.push(account.email);
+			}),
 		} as const;
 		const baseProvider = {
 			streamSimple: vi.fn((_model: { headers?: Record<string, string> }) => {
@@ -121,79 +111,60 @@ describe("createStreamWrapper", () => {
 		const stream = createStreamWrapper(
 			accountManager as never,
 			baseProvider as never,
-		)(
-			{
-				id: "model",
-				provider: "multicodex",
-				api: "openai-codex-responses",
-			} as Model<"openai-codex-responses">,
-			{} as never,
-		);
+		)(createMulticodexTestModel(), {} as never);
 
-		const events = await collect(stream);
+		const events = await collectEvents(stream);
 		expect(headers).toEqual(["manual@example.com", "auto@example.com"]);
-		expect(accountManager.handleQuotaExceeded).toHaveBeenCalledTimes(1);
-		expect(accountManager.clearManualAccount).toHaveBeenCalledTimes(1);
-		expect(events[0]?.type).toBe("partial");
-		const partialEvent = events[0] as
-			| { partial?: { provider: string } }
+		expect(exhaustedEmails).toEqual(["manual@example.com"]);
+		expect(manualPinned).toBe(false);
+		const firstEvent = events[0] as
+			| { type?: string; partial?: { provider?: string } }
 			| undefined;
-		if (partialEvent?.partial) {
-			expect(partialEvent.partial.provider).toBe("multicodex");
-		}
+		expect(firstEvent?.type).toBe("partial");
+		expect(firstEvent?.partial?.provider).toBe("multicodex");
 		expect(events[1]?.type).toBe("error");
 		if (events[1]?.type === "error") {
 			expect(events[1].error.provider).toBe("multicodex");
 		}
 	});
 
-	it("honors excludeEmails across quota retries and caps rotation retries", async () => {
+	it("excludes exhausted accounts across retries and stops after retry cap", async () => {
 		const accounts = [
-			makeAccount("a@example.com"),
-			makeAccount("b@example.com"),
-			makeAccount("c@example.com"),
-			makeAccount("d@example.com"),
-			makeAccount("e@example.com"),
-			makeAccount("f@example.com"),
+			createAdapterTestAccount("a@example.com"),
+			createAdapterTestAccount("b@example.com"),
+			createAdapterTestAccount("c@example.com"),
+			createAdapterTestAccount("d@example.com"),
+			createAdapterTestAccount("e@example.com"),
+			createAdapterTestAccount("f@example.com"),
 		];
+		const headers: string[] = [];
 		const seenExcludes: Array<string[]> = [];
-		let calls = 0;
+		const exhaustedEmails: string[] = [];
+
 		const accountManager = {
-			getAvailableManualAccount: vi.fn(
-				({ excludeEmails }: { excludeEmails?: Set<string> }) => {
-					seenExcludes.push(Array.from(excludeEmails ?? []));
-					return undefined;
-				},
-			),
+			getAvailableManualAccount: vi.fn(() => undefined),
 			hasManualAccount: vi.fn(() => false),
 			clearManualAccount: vi.fn(),
 			activateBestAccount: vi.fn(
 				async ({ excludeEmails }: { excludeEmails?: Set<string> }) => {
-					const next = accounts.find(
-						(account) => !excludeEmails?.has(account.email),
-					);
-					return next;
+					seenExcludes.push(Array.from(excludeEmails ?? []));
+					return accounts.find((account) => !excludeEmails?.has(account.email));
 				},
 			),
 			ensureValidToken: vi.fn(
 				async (account: Account) => `${account.email}-token`,
 			),
-			handleQuotaExceeded: vi.fn(async () => {}),
+			handleQuotaExceeded: vi.fn(async (account: Account) => {
+				exhaustedEmails.push(account.email);
+			}),
 		} as const;
 		const baseProvider = {
 			streamSimple: vi.fn((_model: { headers?: Record<string, string> }) => {
-				calls += 1;
+				headers.push(_model.headers?.["X-Multicodex-Account"] ?? "");
 				async function* inner() {
-					if (calls <= 6) {
-						yield {
-							type: "error",
-							error: { errorMessage: "quota exceeded" },
-						} as AssistantMessageEvent;
-						return;
-					}
 					yield {
-						type: "done",
-						message: { provider: "openai-codex" },
+						type: "error",
+						error: { errorMessage: "quota exceeded" },
 					} as AssistantMessageEvent;
 				}
 				return inner();
@@ -203,20 +174,21 @@ describe("createStreamWrapper", () => {
 		const stream = createStreamWrapper(
 			accountManager as never,
 			baseProvider as never,
-		)(
-			{
-				id: "model",
-				provider: "multicodex",
-				api: "openai-codex-responses",
-			} as Model<"openai-codex-responses">,
-			{} as never,
-		);
+		)(createMulticodexTestModel(), {} as never);
 
-		const events = await collect(stream);
-		expect(calls).toBe(6);
-		expect(accountManager.handleQuotaExceeded).toHaveBeenCalledTimes(5);
+		const events = await collectEvents(stream);
+		expect(headers).toEqual(accounts.map((account) => account.email));
+		expect(exhaustedEmails).toEqual(
+			accounts.slice(0, 5).map((account) => account.email),
+		);
 		expect(seenExcludes[0]).toEqual([]);
-		expect(seenExcludes.at(-1)).toContain("a@example.com");
+		expect(seenExcludes.at(-1)).toEqual(
+			accounts.slice(0, 5).map((account) => account.email),
+		);
+		expect(events).toHaveLength(1);
 		expect(events[0]?.type).toBe("error");
+		if (events[0]?.type === "error") {
+			expect(events[0].error.provider).toBe("multicodex");
+		}
 	});
 });
