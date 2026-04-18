@@ -3,6 +3,7 @@ import type { Account, LegacyStorageData, StorageData } from "./types";
 export interface StorageAdapter {
 	load(): StorageData;
 	save(data: StorageData): void;
+	update?(mutator: (current: StorageData) => StorageData): StorageData;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
