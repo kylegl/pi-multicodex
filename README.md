@@ -40,6 +40,8 @@ pi -e ./index.ts
 
 - `/multicodex-login <email>`
   - Adds/updates an account in the rotation pool.
+- `/multicodex-remove [email]`
+  - Removes an account from the rotation pool (prompts if email is omitted).
 - `/multicodex-use`
   - Manually pick an account for the current session (until rotation clears it).
 - `/multicodex-status`
