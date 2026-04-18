@@ -36,6 +36,10 @@ export function createMemoryStorage(
 		save: (next) => {
 			data = structuredClone(next);
 		},
+		update: (mutator) => {
+			data = structuredClone(mutator(structuredClone(data)));
+			return structuredClone(data);
+		},
 	};
 	return { adapter, getData: () => structuredClone(data) };
 }
