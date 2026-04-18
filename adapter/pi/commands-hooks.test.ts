@@ -25,23 +25,79 @@ describe("adapter command and hook wiring", () => {
 			refreshUsageForAllAccounts: vi.fn(),
 			getActiveAccount: vi.fn(),
 			getCachedUsage: vi.fn(),
+			isRefreshBlocked: vi.fn(() => false),
 			getAvailableManualAccount: vi.fn(),
 			hasManualAccount: vi.fn(),
 			clearManualAccount: vi.fn(),
 			setManualAccount: vi.fn(),
 			addOrUpdateAccount: vi.fn(),
+			removeAccount: vi.fn(() => true),
 		} as never;
 
 		registerMulticodexCommands(pi, manager);
 
 		expect(Object.keys(registered)).toEqual([
 			"multicodex-login",
+			"multicodex-remove",
 			"multicodex-use",
 			"multicodex-status",
 		]);
 		expect(typeof registered["multicodex-login"]?.handler).toBe("function");
+		expect(typeof registered["multicodex-remove"]?.handler).toBe("function");
 		expect(typeof registered["multicodex-use"]?.handler).toBe("function");
 		expect(typeof registered["multicodex-status"]?.handler).toBe("function");
+	});
+
+	it("multicodex-remove removes a selected account", async () => {
+		const registered: Record<
+			string,
+			{
+				description: string;
+				handler: (args: string, ctx: unknown) => Promise<void>;
+			}
+		> = {};
+		const manager = {
+			getAccounts: () => [createAdapterTestAccount("remove@example.com")],
+			removeAccount: vi.fn(() => true),
+			isRefreshBlocked: () => false,
+			setManualAccount: vi.fn(),
+			refreshUsageForAllAccounts: vi.fn(),
+			getActiveAccount: vi.fn(),
+			getCachedUsage: vi.fn(),
+			getAvailableManualAccount: vi.fn(),
+			hasManualAccount: vi.fn(),
+			clearManualAccount: vi.fn(),
+			addOrUpdateAccount: vi.fn(),
+		};
+		const pi = {
+			registerCommand: (
+				name: string,
+				config: {
+					description: string;
+					handler: (args: string, ctx: unknown) => Promise<void>;
+				},
+			) => {
+				registered[name] = config;
+			},
+			registerProvider: vi.fn(),
+			on: vi.fn(),
+			exec: vi.fn(),
+		} as never;
+		registerMulticodexCommands(pi, manager as never);
+
+		const notify = vi.fn();
+		await registered["multicodex-remove"]?.handler("", {
+			ui: {
+				notify,
+				select: vi.fn(async () => "remove@example.com"),
+			},
+		});
+
+		expect(manager.removeAccount).toHaveBeenCalledWith("remove@example.com");
+		expect(notify).toHaveBeenCalledWith(
+			"Removed remove@example.com from MultiCodex.",
+			"info",
+		);
 	});
 
 	it("session_start refreshes, clears stale manual pin, and activates best account", async () => {

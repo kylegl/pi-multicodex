@@ -60,6 +60,41 @@ export function registerMulticodexCommands(
 		},
 	});
 
+	pi.registerCommand("multicodex-remove", {
+		description: "Remove an account from the rotation pool",
+		handler: async (
+			args: string,
+			ctx: ExtensionCommandContext,
+		): Promise<void> => {
+			const accounts = accountManager.getAccounts();
+			if (accounts.length === 0) {
+				ctx.ui.notify(
+					"No accounts logged in. Use /multicodex-login first.",
+					"warning",
+				);
+				return;
+			}
+
+			let email = args.trim();
+			if (!email) {
+				const selected = await ctx.ui.select(
+					"Remove MultiCodex Account",
+					accounts.map((account) => account.email),
+				);
+				if (!selected) return;
+				email = selected;
+			}
+
+			const removed = accountManager.removeAccount(email);
+			if (!removed) {
+				ctx.ui.notify(`No account found for ${email}.`, "warning");
+				return;
+			}
+
+			ctx.ui.notify(`Removed ${email} from MultiCodex.`, "info");
+		},
+	});
+
 	pi.registerCommand("multicodex-use", {
 		description: "Switch active Codex account for this session",
 		handler: async (
@@ -75,18 +110,28 @@ export function registerMulticodexCommands(
 				return;
 			}
 
-			const options = accounts.map(
-				(account) =>
-					account.email +
-					(account.quotaExhaustedUntil &&
+			const options = accounts.map((account) => {
+				const tags = [
+					account.quotaExhaustedUntil &&
 					account.quotaExhaustedUntil > Date.now()
-						? " (Quota)"
-						: ""),
-			);
+						? "quota"
+						: null,
+					accountManager.isRefreshBlocked(account.email) ? "relogin" : null,
+				]
+					.filter(Boolean)
+					.join(", ");
+				return tags ? `${account.email} (${tags})` : account.email;
+			});
 			const selected = await ctx.ui.select("Select Account", options);
 			if (!selected) return;
 
 			const email = selected.split(" ")[0];
+			if (accountManager.isRefreshBlocked(email)) {
+				ctx.ui.notify(
+					`Account ${email} needs re-login. Run /multicodex-login ${email}.`,
+					"warning",
+				);
+			}
 			accountManager.setManualAccount(email);
 			ctx.ui.notify(`Switched to ${email}`, "info");
 		},
@@ -116,9 +161,11 @@ export function registerMulticodexCommands(
 					account.quotaExhaustedUntil &&
 					account.quotaExhaustedUntil > Date.now();
 				const untouched = isUsageUntouched(usage) ? "untouched" : null;
+				const refreshBlocked = accountManager.isRefreshBlocked(account.email);
 				const tags = [
 					isActive ? "active" : null,
 					quotaHit ? "quota" : null,
+					refreshBlocked ? "relogin" : null,
 					untouched,
 				]
 					.filter(Boolean)
