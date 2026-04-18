@@ -42,6 +42,7 @@ const USAGE_REQUEST_MAX_RETRIES = 2;
 const USAGE_RETRY_BACKOFF_MS = [300, 900] as const;
 const TOKEN_REFRESH_THRESHOLD_MS = 5 * 60 * 1000;
 const QUOTA_COOLDOWN_MS = 60 * 60 * 1000;
+const TOKEN_REFRESH_FAILURE_COOLDOWN_MS = 10 * 60 * 1000;
 const DEFAULT_STORAGE: StorageData = { schemaVersion: 1, accounts: [] };
 
 function createInMemoryStorageAdapter(): StorageAdapter {
@@ -50,6 +51,11 @@ function createInMemoryStorageAdapter(): StorageAdapter {
 		load: () => structuredClone(data),
 		save: (next) => {
 			data = ensureCanonicalStorageData(next);
+		},
+		update: (mutator) => {
+			const next = ensureCanonicalStorageData(mutator(structuredClone(data)));
+			data = next;
+			return structuredClone(data);
 		},
 	};
 }
@@ -69,6 +75,10 @@ export class AccountManager {
 	private data: StorageData;
 	private readonly usageCache = new Map<string, CodexUsageSnapshot>();
 	private readonly refreshInFlight = new Map<string, Promise<string>>();
+	private readonly refreshFailures = new Map<
+		string,
+		{ until: number; reason: string }
+	>();
 
 	constructor(deps: AccountManagerDeps = {}) {
 		this.storage = deps.storage ?? createInMemoryStorageAdapter();
@@ -94,11 +104,33 @@ export class AccountManager {
 		}
 	}
 
-	private save(): void {
+	private syncFromStorage(): void {
+		this.data = this.load();
+	}
+
+	private updateStorage(mutator: (data: StorageData) => boolean): void {
+		const applyMutator = (current: StorageData): StorageData => {
+			const canonicalCurrent = ensureCanonicalStorageData(current);
+			const next = ensureCanonicalStorageData(canonicalCurrent);
+			const changed = mutator(next);
+			return changed ? next : canonicalCurrent;
+		};
+
 		try {
-			this.storage.save(ensureCanonicalStorageData(this.data));
+			if (this.storage.update) {
+				this.data = this.storage.update(applyMutator);
+				return;
+			}
+
+			const current = this.load();
+			const next = applyMutator(current);
+			if (JSON.stringify(current) !== JSON.stringify(next)) {
+				this.storage.save(next);
+			}
+			this.data = next;
 		} catch (error) {
-			console.error("Failed to save multicodex accounts:", error);
+			console.error("Failed to update multicodex accounts:", error);
+			this.syncFromStorage();
 		}
 	}
 
@@ -106,26 +138,45 @@ export class AccountManager {
 		this.warningHandler = handler;
 	}
 
+	isRefreshBlocked(email: string, options?: { now?: number }): boolean {
+		return Boolean(this.getRefreshFailure(email, options?.now));
+	}
+
+	getRefreshBlockedReason(
+		email: string,
+		options?: { now?: number },
+	): string | undefined {
+		return this.getRefreshFailure(email, options?.now)?.reason;
+	}
+
 	getAccounts(): Account[] {
+		this.syncFromStorage();
 		return this.data.accounts;
 	}
 
 	getAccount(email: string): Account | undefined {
+		this.syncFromStorage();
 		return this.data.accounts.find((account) => account.email === email);
 	}
 
 	getActiveAccount(): Account | undefined {
+		this.syncFromStorage();
 		const manual = this.getManualAccount();
 		if (manual) return manual;
 		if (this.data.activeEmail) {
-			return this.getAccount(this.data.activeEmail);
+			return this.data.accounts.find(
+				(account) => account.email === this.data.activeEmail,
+			);
 		}
 		return this.data.accounts[0];
 	}
 
 	getManualAccount(): Account | undefined {
+		this.syncFromStorage();
 		if (!this.manualEmail) return undefined;
-		const account = this.getAccount(this.manualEmail);
+		const account = this.data.accounts.find(
+			(entry) => entry.email === this.manualEmail,
+		);
 		if (!account) {
 			this.manualEmail = undefined;
 			return undefined;
@@ -147,15 +198,19 @@ export class AccountManager {
 		if (!manual) return undefined;
 		if (options?.excludeEmails?.has(manual.email)) return undefined;
 		if (!isAccountAvailable(manual, now)) return undefined;
+		if (this.isRefreshBlocked(manual.email, { now })) return undefined;
 		return manual;
 	}
 
 	setActiveAccount(email: string): void {
-		const account = this.getAccount(email);
-		if (!account) return;
-		this.data.activeEmail = email;
-		account.lastUsed = this.now();
-		this.save();
+		const now = this.now();
+		this.updateStorage((data) => {
+			const account = data.accounts.find((entry) => entry.email === email);
+			if (!account) return false;
+			data.activeEmail = email;
+			account.lastUsed = now;
+			return true;
+		});
 	}
 
 	setManualAccount(email: string): void {
@@ -170,34 +225,70 @@ export class AccountManager {
 	}
 
 	addOrUpdateAccount(email: string, creds: RefreshTokenResult): void {
-		const existing = this.getAccount(email);
-		if (existing) {
-			existing.accessToken = creds.access;
-			existing.refreshToken = creds.refresh;
-			existing.expiresAt = creds.expires;
-			if (typeof creds.accountId === "string") {
-				existing.accountId = creds.accountId;
+		const now = this.now();
+		this.updateStorage((data) => {
+			const existing = data.accounts.find((entry) => entry.email === email);
+			if (existing) {
+				existing.accessToken = creds.access;
+				existing.refreshToken = creds.refresh;
+				existing.expiresAt = creds.expires;
+				if (typeof creds.accountId === "string") {
+					existing.accountId = creds.accountId;
+				}
+				existing.lastUsed = now;
+			} else {
+				data.accounts.push({
+					email,
+					accessToken: creds.access,
+					refreshToken: creds.refresh,
+					expiresAt: creds.expires,
+					lastUsed: now,
+					...(typeof creds.accountId === "string"
+						? { accountId: creds.accountId }
+						: {}),
+				});
 			}
-		} else {
-			this.data.accounts.push({
-				email,
-				accessToken: creds.access,
-				refreshToken: creds.refresh,
-				expiresAt: creds.expires,
-				...(typeof creds.accountId === "string"
-					? { accountId: creds.accountId }
-					: {}),
-			});
+			data.activeEmail = email;
+			return true;
+		});
+		this.clearRefreshFailure(email);
+	}
+
+	removeAccount(email: string): boolean {
+		let removed = false;
+		if (this.manualEmail === email) {
+			this.manualEmail = undefined;
 		}
-		this.setActiveAccount(email);
+		this.updateStorage((data) => {
+			const nextAccounts = data.accounts.filter(
+				(entry) => entry.email !== email,
+			);
+			if (nextAccounts.length === data.accounts.length) {
+				return false;
+			}
+			data.accounts = nextAccounts;
+			if (data.activeEmail === email) {
+				data.activeEmail = nextAccounts[0]?.email;
+			}
+			removed = true;
+			return true;
+		});
+		if (removed) {
+			this.usageCache.delete(email);
+			this.refreshFailures.delete(email);
+			this.refreshInFlight.delete(email);
+		}
+		return removed;
 	}
 
 	markExhausted(email: string, until: number): void {
-		const account = this.getAccount(email);
-		if (account) {
+		this.updateStorage((data) => {
+			const account = data.accounts.find((entry) => entry.email === email);
+			if (!account) return false;
+			if (account.quotaExhaustedUntil === until) return false;
 			account.quotaExhaustedUntil = until;
-			this.save();
-		}
+			return true;
+		});
 	}
 
 	getCachedUsage(email: string): CodexUsageSnapshot | undefined {
@@ -218,13 +309,18 @@ export class AccountManager {
 			return cached;
 		}
 
+		if (this.isRefreshBlocked(account.email, { now })) {
+			return cached;
+		}
+
 		let lastError: unknown;
 		for (let attempt = 0; attempt <= USAGE_REQUEST_MAX_RETRIES; attempt++) {
 			try {
 				const token = await this.ensureValidToken(account);
+				const latest = this.getAccount(account.email);
 				const usage = await this.usageClient.fetchCodexUsage(
 					token,
-					account.accountId,
+					latest?.accountId,
 					{ signal: options?.signal },
 				);
 				this.usageCache.set(account.email, usage);
@@ -261,10 +357,12 @@ export class AccountManager {
 		force?: boolean;
 		signal?: AbortSignal;
 	}): Promise<void> {
+		const now = this.now();
+		const accounts = this.getAccounts().filter(
+			(account) => !this.isRefreshBlocked(account.email, { now }),
+		);
 		await Promise.all(
-			this.getAccounts().map((account) =>
-				this.refreshUsageForAccount(account, options),
-			),
+			accounts.map((account) => this.refreshUsageForAccount(account, options)),
 		);
 	}
 
@@ -274,6 +372,9 @@ export class AccountManager {
 	): Promise<void> {
 		const now = this.now();
 		const stale = accounts.filter((account) => {
+			if (this.isRefreshBlocked(account.email, { now })) {
+				return false;
+			}
 			const cached = this.usageCache.get(account.email);
 			return !cached || now - cached.fetchedAt >= USAGE_CACHE_TTL_MS;
 		});
@@ -291,7 +392,9 @@ export class AccountManager {
 	}): Promise<Account | undefined> {
 		const now = this.now();
 		this.clearExpiredExhaustion(now);
-		const accounts = this.data.accounts;
+		const accounts = this.getAccounts().filter(
+			(account) => !this.isRefreshBlocked(account.email, { now }),
+		);
 		await this.refreshUsageIfStale(accounts, options);
 
 		const selected = pickBestAccount(accounts, this.usageCache, {
@@ -321,26 +424,68 @@ export class AccountManager {
 	}
 
 	async ensureValidToken(account: Account): Promise<string> {
-		if (this.now() < account.expiresAt - TOKEN_REFRESH_THRESHOLD_MS) {
-			return account.accessToken;
+		this.syncFromStorage();
+		const latestAccount = this.data.accounts.find(
+			(entry) => entry.email === account.email,
+		);
+		if (!latestAccount) {
+			throw new Error(
+				`Multicodex account ${account.email} is not available. Run /multicodex-login ${account.email}.`,
+			);
 		}
 
-		const key = account.email;
+		const now = this.now();
+		const blockedReason = this.getRefreshBlockedReason(latestAccount.email, {
+			now,
+		});
+		if (blockedReason) {
+			if (now < latestAccount.expiresAt - TOKEN_REFRESH_THRESHOLD_MS) {
+				this.clearRefreshFailure(latestAccount.email);
+				return latestAccount.accessToken;
+			}
+			throw new Error(blockedReason);
+		}
+
+		if (now < latestAccount.expiresAt - TOKEN_REFRESH_THRESHOLD_MS) {
+			return latestAccount.accessToken;
+		}
+
+		const key = latestAccount.email;
 		const existing = this.refreshInFlight.get(key);
 		if (existing) {
 			return existing;
 		}
 
 		const refreshPromise = (async () => {
-			const result = await this.refreshToken(account.refreshToken);
-			account.accessToken = result.access;
-			account.refreshToken = result.refresh;
-			account.expiresAt = result.expires;
-			if (typeof result.accountId === "string") {
-				account.accountId = result.accountId;
+			try {
+				const result = await this.refreshToken(latestAccount.refreshToken);
+				let persisted = false;
+				this.updateStorage((data) => {
+					const target = data.accounts.find(
+						(entry) => entry.email === latestAccount.email,
+					);
+					if (!target) return false;
+					target.accessToken = result.access;
+					target.refreshToken = result.refresh;
+					target.expiresAt = result.expires;
+					if (typeof result.accountId === "string") {
+						target.accountId = result.accountId;
+					}
+					persisted = true;
+					return true;
+				});
+				if (!persisted) {
+					throw new Error(
+						`Multicodex account ${latestAccount.email} was removed before refresh completed.`,
+					);
+				}
+				this.clearRefreshFailure(latestAccount.email);
+				return result.access;
+			} catch (error) {
+				const reason = this.formatRefreshFailureReason(latestAccount, error);
+				this.setRefreshFailure(latestAccount.email, reason);
+				throw new Error(reason);
 			}
-			this.save();
-			return account.accessToken;
 		})();
 
 		this.refreshInFlight.set(key, refreshPromise);
@@ -351,16 +496,59 @@ export class AccountManager {
 		}
 	}
 
+	private getRefreshFailure(
+		email: string,
+		now = this.now(),
+	): { until: number; reason: string } | undefined {
+		const failure = this.refreshFailures.get(email);
+		if (!failure) return undefined;
+		if (failure.until <= now) {
+			this.refreshFailures.delete(email);
+			return undefined;
+		}
+		return failure;
+	}
+
+	private setRefreshFailure(email: string, reason: string): void {
+		this.refreshFailures.set(email, {
+			until: this.now() + TOKEN_REFRESH_FAILURE_COOLDOWN_MS,
+			reason,
+		});
+	}
+
+	private clearRefreshFailure(email: string): void {
+		this.refreshFailures.delete(email);
+	}
+
+	private formatRefreshFailureReason(account: Account, error: unknown): string {
+		const message = getErrorMessage(error);
+		if (
+			message.startsWith(`Token refresh failed for ${account.email}`) ||
+			message.startsWith(`Multicodex account ${account.email} was removed`)
+		) {
+			return message;
+		}
+		const cooldownMinutes = Math.floor(
+			TOKEN_REFRESH_FAILURE_COOLDOWN_MS / (60 * 1000),
+		);
+		const cooldownHint = `Pausing automatic refresh attempts for ${cooldownMinutes} minutes.`;
+		const loginHint = `Run /multicodex-login ${account.email} to re-authenticate this account.`;
+		if (/failed to refresh openai codex token/i.test(message)) {
+			return `Token refresh failed for ${account.email}. ${loginHint} ${cooldownHint}`;
+		}
+		return `Token refresh failed for ${account.email}: ${message}. ${cooldownHint}`;
+	}
+
 	private clearExpiredExhaustion(now: number): void {
-		let changed = false;
-		for (const account of this.data.accounts) {
-			if (account.quotaExhaustedUntil && account.quotaExhaustedUntil <= now) {
-				account.quotaExhaustedUntil = undefined;
-				changed = true;
+		this.updateStorage((data) => {
+			let changed = false;
+			for (const account of data.accounts) {
+				if (account.quotaExhaustedUntil && account.quotaExhaustedUntil <= now) {
+					account.quotaExhaustedUntil = undefined;
+					changed = true;
+				}
 			}
-		}
-		if (changed) {
-			this.save();
-		}
+			return changed;
+		});
 	}
 }
