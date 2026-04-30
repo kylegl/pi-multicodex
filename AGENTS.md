@@ -28,3 +28,7 @@ npm run lint
 npm run tsgo
 npm run test
 ```
+
+## Source Code References
+
+- [hermes-agent](.agents/sources/hermes-agent) - Hermes Agent source code for reference
