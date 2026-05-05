@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isQuotaErrorMessage } from "./errors";
+import { getQuotaResetAt, isQuotaErrorMessage } from "./errors";
 import { pickBestAccount } from "./selection";
 import { createTestAccount } from "./test-helpers";
 import {
@@ -14,6 +14,13 @@ describe("core helpers", () => {
 		expect(isQuotaErrorMessage("HTTP 429 Too Many Requests")).toBe(true);
 		expect(isQuotaErrorMessage("usage limit reached")).toBe(true);
 		expect(isQuotaErrorMessage("network error")).toBe(false);
+	});
+
+	it("extracts quota reset timestamps from Codex error JSON", () => {
+		const message =
+			'Codex error: {"type":"error","error":{"type":"usage_limit_reached","resets_at":1777790645},"status_code":429,"headers":{"X-Codex-Primary-Reset-At":"1777790646"}}';
+
+		expect(getQuotaResetAt(message)).toBe(1777790645 * 1000);
 	});
 
 	it("parses usage windows and reset timestamps", () => {
@@ -76,5 +83,22 @@ describe("core helpers", () => {
 		});
 
 		expect(selected?.email).toBe("b");
+	});
+
+	it("does not exhaust distinct emails that share an accountId", () => {
+		const accounts = [
+			createTestAccount("team-a@example.com", {
+				accountId: "team-1",
+				quotaExhaustedUntil: 10_000,
+			}),
+			createTestAccount("team-b@example.com", { accountId: "team-1" }),
+			createTestAccount("other@example.com", { accountId: "team-2" }),
+		];
+		const selected = pickBestAccount(accounts, new Map(), {
+			now: 1_000,
+			random: () => 0,
+		});
+
+		expect(selected?.email).toBe("team-b@example.com");
 	});
 });

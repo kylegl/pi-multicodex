@@ -5,8 +5,34 @@ import {
 	isUsageUntouched,
 } from "./usage";
 
-export function isAccountAvailable(account: Account, now: number): boolean {
-	return !account.quotaExhaustedUntil || account.quotaExhaustedUntil <= now;
+export function getAccountQuotaBucket(account: Account): string {
+	return account.accountId
+		? `${account.email}:${account.accountId}`
+		: account.email;
+}
+
+export function getExhaustedQuotaBuckets(
+	accounts: Account[],
+	now: number,
+): Set<string> {
+	const exhausted = new Set<string>();
+	for (const account of accounts) {
+		if (account.quotaExhaustedUntil && account.quotaExhaustedUntil > now) {
+			exhausted.add(getAccountQuotaBucket(account));
+		}
+	}
+	return exhausted;
+}
+
+export function isAccountAvailable(
+	account: Account,
+	now: number,
+	exhaustedBuckets: Set<string> = new Set(),
+): boolean {
+	return (
+		(!account.quotaExhaustedUntil || account.quotaExhaustedUntil <= now) &&
+		!exhaustedBuckets.has(getAccountQuotaBucket(account))
+	);
 }
 
 export function pickRandomAccount(
@@ -45,9 +71,10 @@ export function pickBestAccount(
 	},
 ): Account | undefined {
 	const now = options?.now ?? Date.now();
+	const exhaustedBuckets = getExhaustedQuotaBuckets(accounts, now);
 	const available = accounts.filter(
 		(account) =>
-			isAccountAvailable(account, now) &&
+			isAccountAvailable(account, now, exhaustedBuckets) &&
 			!options?.excludeEmails?.has(account.email),
 	);
 	if (available.length === 0) return undefined;

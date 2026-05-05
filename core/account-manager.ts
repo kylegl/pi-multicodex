@@ -1,5 +1,6 @@
 import {
 	getErrorMessage,
+	getQuotaResetAt,
 	isAbortLikeError,
 	isRetryableUsageError,
 } from "./errors";
@@ -392,8 +393,11 @@ export class AccountManager {
 	}): Promise<Account | undefined> {
 		const now = this.now();
 		this.clearExpiredExhaustion(now);
-		const accounts = this.getAccounts().filter(
-			(account) => !this.isRefreshBlocked(account.email, { now }),
+		const allAccounts = this.getAccounts();
+		const accounts = allAccounts.filter(
+			(account) =>
+				isAccountAvailable(account, now) &&
+				!this.isRefreshBlocked(account.email, { now }),
 		);
 		await this.refreshUsageIfStale(accounts, options);
 
@@ -410,14 +414,17 @@ export class AccountManager {
 
 	async handleQuotaExceeded(
 		account: Account,
-		options?: { signal?: AbortSignal },
+		options?: { signal?: AbortSignal; errorMessage?: string },
 	): Promise<void> {
 		const usage = await this.refreshUsageForAccount(account, {
 			force: true,
 			signal: options?.signal,
 		});
 		const now = this.now();
-		const resetAt = getNextResetAt(usage);
+		const messageResetAt = options?.errorMessage
+			? getQuotaResetAt(options.errorMessage)
+			: undefined;
+		const resetAt = messageResetAt ?? getNextResetAt(usage);
 		const fallback = now + QUOTA_COOLDOWN_MS;
 		const until = resetAt && resetAt > now ? resetAt : fallback;
 		this.markExhausted(account.email, until);
