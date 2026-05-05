@@ -334,11 +334,15 @@ describe("AccountManager without pi runtime", () => {
 
 	it("marks exhausted accounts using reset time or fallback cooldown", async () => {
 		let now = 1_000;
+		const { adapter, getData } = createMemoryStorage({
+			schemaVersion: 1,
+			accounts: [
+				createTestAccount("a@example.com", { accountId: "team-1" }),
+				createTestAccount("b@example.com", { accountId: "team-1" }),
+			],
+		});
 		const manager = new AccountManager({
-			storage: createMemoryStorage({
-				schemaVersion: 1,
-				accounts: [createTestAccount("a@example.com")],
-			}).adapter,
+			storage: adapter,
 			clock: () => now,
 			refreshToken: vi.fn(
 				async (refreshToken: string): Promise<RefreshTokenResult> => ({
@@ -362,6 +366,14 @@ describe("AccountManager without pi runtime", () => {
 		expect(manager.getAccount("a@example.com")?.quotaExhaustedUntil).toBe(
 			8_888,
 		);
+		expect(
+			manager.getAccount("b@example.com")?.quotaExhaustedUntil,
+		).toBeUndefined();
+		expect(
+			getData().accounts.filter(
+				(account) => account.quotaExhaustedUntil === 8_888,
+			),
+		).toHaveLength(1);
 
 		now = 10_000;
 		const next = manager.getAccount("a@example.com");
@@ -370,5 +382,8 @@ describe("AccountManager without pi runtime", () => {
 		expect(manager.getAccount("a@example.com")?.quotaExhaustedUntil).toBe(
 			10_000 + 60 * 60 * 1000,
 		);
+		expect(
+			manager.getAccount("b@example.com")?.quotaExhaustedUntil,
+		).toBeUndefined();
 	});
 });
