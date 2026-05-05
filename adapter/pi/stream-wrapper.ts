@@ -93,6 +93,7 @@ export function createStreamWrapper(
 							if (isQuota && !forwardedAny && attempt < MAX_ROTATION_RETRIES) {
 								await accountManager.handleQuotaExceeded(account, {
 									signal: options?.signal,
+									errorMessage: msg,
 								});
 								if (usingManual) {
 									accountManager.clearManualAccount();
