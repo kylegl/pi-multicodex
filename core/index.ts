@@ -9,6 +9,7 @@ export type {
 export { AccountManager } from "./account-manager";
 export {
 	getErrorMessage,
+	getQuotaResetAt,
 	getUsageHttpStatus,
 	isAbortLikeError,
 	isQuotaErrorMessage,

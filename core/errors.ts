@@ -9,6 +9,40 @@ export function isQuotaErrorMessage(message: string): boolean {
 	);
 }
 
+function normalizeResetTimestamp(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+		return value > 1_000_000_000_000 ? value : value * 1000;
+	}
+	if (typeof value === "string" && value.trim()) {
+		const numeric = Number(value.trim());
+		if (Number.isFinite(numeric) && numeric > 0) {
+			return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+		}
+	}
+	return undefined;
+}
+
+export function getQuotaResetAt(message: string): number | undefined {
+	const jsonStart = message.indexOf("{");
+	if (jsonStart >= 0) {
+		try {
+			const parsed = JSON.parse(message.slice(jsonStart));
+			const direct = normalizeResetTimestamp(parsed?.error?.resets_at);
+			if (direct !== undefined) return direct;
+			const headerReset = normalizeResetTimestamp(
+				parsed?.headers?.["X-Codex-Primary-Reset-At"],
+			);
+			if (headerReset !== undefined) return headerReset;
+		} catch {
+			// Fall through to regex extraction for non-JSON error strings.
+		}
+	}
+	const match = message.match(
+		/(?:resets_at|X-Codex-Primary-Reset-At)["':\s]+(\d+(?:\.\d+)?)/i,
+	);
+	return match ? normalizeResetTimestamp(match[1]) : undefined;
+}
+
 export function isAbortLikeError(err: unknown): boolean {
 	if (err instanceof Error) {
 		if (err.name === "AbortError") return true;
